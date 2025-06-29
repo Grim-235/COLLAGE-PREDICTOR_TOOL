@@ -1,0 +1,345 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MHT CET 2025 College Predictor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        body { font-family: 'Arial', sans-serif; }
+        #resultsTable { display: none; }
+        #resultsTable.show { display: table; }
+        .container { max-width: 100%; padding: 1rem; }
+        @media (min-width: 640px) { .container { max-width: 640px; } }
+        @media (min-width: 768px) { .container { max-width: 768px; } }
+        .pagination { display: none; }
+        .pagination.show { display: flex; }
+        .loading { display: none; }
+        .loading.show { display: block; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="container bg-white p-6 rounded-lg shadow-lg">
+        <h1 class="text-2xl font-bold text-center mb-6 text-blue-600">MHT CET 2025 College Predictor</h1>
+        <p class="text-center text-sm text-gray-600 mb-4">Enter your MHT CET details to find ALL engineering colleges in Maharashtra!</p>
+        <form id="predictorForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">MHT CET Percentile (0–100)</label>
+                <input type="number" id="percentile" min="0" max="100" step="0.01" required
+                       class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Category</label>
+                <select id="category" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="OBC">OBC</option>
+                    <option value="General">General</option>
+                    <option value="SC">SC</option>
+                    <option value="ST">ST</option>
+                    <option value="EWS">EWS</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Gender</label>
+                <select id="gender" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Preferred Branch</label>
+                <select id="branch" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="All">All Branches</option>
+                    <option value="Mechanical">Mechanical</option>
+                    <option value="Civil">Civil</option>
+                    <option value="Electrical">Electrical</option>
+                    <option value="ENTC">Electronics & Telecommunication</option>
+                    <option value="CS">Computer Science</option>
+                    <option value="IT">Information Technology</option>
+                    <option value="Chemical">Chemical</option>
+                    <option value="AI">Artificial Intelligence</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Preferred District</label>
+                <select id="district" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="All">All Districts</option>
+                    <option value="Pune">Pune</option>
+                    <option value="Mumbai">Mumbai</option>
+                    <option value="Nagpur">Nagpur</option>
+                    <option value="Aurangabad">Aurangabad</option>
+                    <option value="Nashik">Nashik</option>
+                    <option value="Kolhapur">Kolhapur</option>
+                    <option value="Solapur">Solapur</option>
+                    <option value="Amravati">Amravati</option>
+                    <option value="Thane">Thane</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Admission Type</label>
+                <select id="admissionType" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="State-level">State-level</option>
+                    <option value="Home University">Home University</option>
+                    <option value="Other than Home University">Other than Home University</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Home University</label>
+                <select id="homeUniversity" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="All">All Universities</option>
+                    <option value="SPPU">Savitribai Phule Pune University</option>
+                    <option value="Mumbai University">Mumbai University</option>
+                    <option value="RTMNU">RTM Nagpur University</option>
+                    <option value="BAMU">Dr. Babasaheb Ambedkar Marathwada University</option>
+                    <option value="SGBAU">Sant Gadge Baba Amravati University</option>
+                    <option value="Shivaji University">Shivaji University</option>
+                    <option value="Solapur University">Solapur University</option>
+                    <option value="North Maharashtra">North Maharashtra University</option>
+                </select>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition">Predict Colleges</button>
+        </form>
+        <div id="loading" class="loading text-center text-gray-600 mt-4">Loading results...</div>
+        <div id="results" class="mt-6">
+            <h2 class="text-xl font-semibold mb-4 text-blue-600">Predicted Colleges</h2>
+            <div class="overflow-x-auto">
+                <table id="resultsTable" class="w-full border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-blue-100">
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">College Name</th>
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">Location</th>
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">Sample Branches</th>
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">Est. OBC Cutoff</th>
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">Home University</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <div id="pagination" class="pagination mt-4 flex justify-center space-x-2"></div>
+            <button id="downloadPdf" class="mt-4 bg-green-600 text-white p-2 rounded-md hover:bg-green-700 transition hidden">Download as PDF</button>
+            <p class="mt-4 text-sm text-gray-600">Note: Cutoffs are estimates based on 2023–2024 CAP data. Verify with official results at <a href="https://cetcell.mahacet.org" class="text-blue-600">cetcell.mahacet.org</a>.</p>
+        </div>
+    </div>
+
+    <script>
+        // Load colleges from JSON file
+        async function loadColleges() {
+            try {
+                const response = await fetch('colleges.json');
+                if (!response.ok) throw new Error('Failed to load colleges data');
+                return await response.json();
+            } catch (error) {
+                console.error(error);
+                alert('Error loading college data. Please try again later.');
+                return [];
+            }
+        }
+
+        document.getElementById('predictorForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+            document.getElementById('resultsTable').classList.remove('show');
+            document.getElementById('downloadPdf').classList.add('hidden');
+            document.getElementById('pagination').classList.remove('show');
+
+            const inputs = {
+                percentile: parseFloat(document.getElementById('percentile').value),
+                category: document.getElementById('category').value,
+                gender: document.getElementById('gender').value,
+                branch: document.getElementById('branch').value,
+                district: document.getElementById('district').value,
+                admissionType: document.getElementById('admissionType').value,
+                homeUniversity: document.getElementById('homeUniversity').value
+            };
+
+            // Validate percentile
+            if (inputs.percentile < 0 || inputs.percentile > 100) {
+                alert('Please enter a valid percentile between 0 and 100.');
+                loading.classList.remove('show');
+                return;
+            }
+
+            // Load and filter colleges
+            const colleges = await loadColleges();
+            let filteredColleges = colleges.filter(college => {
+                const cutoffKey = `cutoff_${inputs.category.toLowerCase()}` in college ? `cutoff_${inputs.category.toLowerCase()}` : 'cutoff_general';
+                const [minCutoff, maxCutoff] = college[cutoffKey].split('-').map(Number);
+                const isPercentileMatch = inputs.percentile >= minCutoff - 5 && inputs.percentile <= maxCutoff + 5;
+                const isBranchMatch = inputs.branch === 'All' || college.branches.includes(inputs.branch);
+                const isDistrictMatch = inputs.district === 'All' || college.location === inputs.district;
+                const isUniversityMatch = inputs.homeUniversity === 'All' || college.university === inputs.homeUniversity;
+                const isAdmissionMatch = true; // Simplified
+                return isPercentileMatch && isBranchMatch && isDistrictMatch && isUniversityMatch && isAdmissionMatch;
+            });
+
+            // Sort by cutoff descending
+            filteredColleges.sort((a, b) => {
+                const [minA] = a[`cutoff_${inputs.category.toLowerCase()}` in a ? `cutoff_${inputs.category.toLowerCase()}` : 'cutoff_general'].split('-').map(Number);
+                const [minB] = b[`cutoff_${inputs.category.toLowerCase()}` in b ? `cutoff_${inputs.category.toLowerCase()}` : 'cutoff_general'].split('-').map(Number);
+                return minB - minA;
+            });
+
+            // Pagination
+            const itemsPerPage = 25;
+            let currentPage = 1;
+            const totalPages = Math.ceil(filteredColleges.length / itemsPerPage);
+
+            function displayPage(page) {
+                const start = (page - 1) * itemsPerPage;
+                const end = start + itemsPerPage;
+                const paginatedColleges = filteredColleges.slice(start, end);
+
+                const resultsBody = document.getElementById('resultsBody');
+                resultsBody.innerHTML = '';
+                paginatedColleges.forEach(college => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50';
+                    row.innerHTML = `
+                        <td class="border border-gray-300 p-2">${college.name}</td>
+                        <td class="border border-gray-300 p-2">${college.location}</td>
+                        <td class="border border-gray-300 p-2">${college.branches}</td>
+                        <td class="border border-gray-300 p-2">${college[`cutoff_${inputs.category.toLowerCase()}` in college ? `cutoff_${inputs.category.toLowerCase()}` : 'cutoff_general']}</td>
+                        <td class="border border-gray-300 p-2">${college.university}</td>
+                    `;
+                    resultsBody.appendChild(row);
+                });
+
+                // Update pagination controls
+                const pagination = document.getElementById('pagination');
+                pagination.innerHTML = '';
+                if (totalPages > 1) {
+                    pagination.classList.add('show');
+                    for (let i = 1; i <= totalPages; i++) {
+                        const button = document.createElement('button');
+                        button.className = `px-3 py-1 rounded ${i === page ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`;
+                        button.textContent = i;
+                        button.addEventListener('click', () => displayPage(i));
+                        pagination.appendChild(button);
+                    }
+                } else {
+                    pagination.classList.remove('show');
+                }
+
+                // Show table and download button
+                document.getElementById('resultsTable').classList.add('show');
+                document.getElementById('downloadPdf').classList.remove('hidden');
+                loading.classList.remove('show');
+
+                // Handle no results
+                if (filteredColleges.length === 0) {
+                    resultsBody.innerHTML = '<tr><td colspan="5" class="text-center p-2 text-red-600">No colleges match your criteria. Try adjusting your inputs (e.g., broader percentile range or "All" for branch/district).</td></tr>';
+                    document.getElementById('downloadPdf').classList.add('hidden');
+                    pagination.classList.remove('show');
+                    loading.classList.remove('show');
+                }
+            }
+
+            displayPage(1);
+
+            // PDF Download
+            document.getElementById('downloadPdf').addEventListener('click', function() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+                // Header
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(16);
+                doc.text('MHT CET 2025 College Predictor Results', 10, 15);
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.text('Generated on: June 29, 2025', 10, 22);
+
+                // Input Details
+                doc.text(`Percentile: ${inputs.percentile}`, 10, 30);
+                doc.text(`Category: ${inputs.category}`, 10, 36);
+                doc.text(`Gender: ${inputs.gender}`, 10, 42);
+                doc.text(`Branch: ${inputs.branch}`, 10, 48);
+                doc.text(`District: ${inputs.district}`, 10, 54);
+                doc.text(`Admission Type: ${inputs.admissionType}`, 10, 60);
+                doc.text(`Home University: ${inputs.homeUniversity}`, 10, 66);
+
+                // Introduction
+                doc.setFontSize(10);
+                doc.text('This report lists engineering colleges in Maharashtra where you have a high to moderate chance of admission based on your MHT CET 2025 details. Use this list to prioritize colleges during CAP counseling (fe2025.mahacet.org, deadline July 8, 2025).', 10, 74, { maxWidth: 190 });
+
+                // Table
+                const tableData = filteredColleges.map(college => [
+                    college.name,
+                    college.location,
+                    college.branches,
+                    college[`cutoff_${inputs.category.toLowerCase()}` in college ? `cutoff_${inputs.category.toLowerCase()}` : 'cutoff_general'],
+                    college.university
+                ]);
+
+                doc.autoTable({
+                    head: [['College Name', 'Location', 'Sample Branches', 'Est. Cutoff', 'Home University']],
+                    body: tableData,
+                    startY: 80,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+                    headStyles: { fillColor: [0, 102, 204], textColor: [255, 255, 255], fontStyle: 'bold' },
+                    columnStyles: {
+                        0: { cellWidth: 60 },
+                        1: { cellWidth: 30 },
+                        2: { cellWidth: 40 },
+                        3: { cellWidth: 30 },
+                        4: { cellWidth: 30 }
+                    },
+                    margin: { top: 80, left: 10, right: 10 }
+                });
+
+                // Footer
+                const finalY = doc.lastAutoTable.finalY || 80;
+                doc.setFontSize(8);
+                doc.text('Note: Cutoffs are estimates based on 2023–2024 CAP data. Verify with official results at cetcell.mahacet.org. For counseling, visit fe2025.mahacet.org by July 8, 2025.', 10, finalY + 10, { maxWidth: 190 });
+                doc.text('Generated by MHT CET College Predictor', 10, finalY + 20);
+
+                doc.save('MHT_CET_College_Predictor_Results.pdf');
+            });
+        });
+    </script>
+</body>
+</html>
