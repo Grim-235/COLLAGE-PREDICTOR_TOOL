@@ -1,0 +1,335 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MHT CET 2025 College Predictor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: 'Arial', sans-serif; }
+        #resultsTable { display: none; }
+        #resultsTable.show { display: table; }
+        .container { max-width: 100%; padding: 1rem; }
+        @media (min-width: 640px) { .container { max-width: 640px; } }
+        @media (min-width: 768px) { .container { max-width: 768px; } }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="container bg-white p-6 rounded-lg shadow-lg">
+        <h1 class="text-2xl font-bold text-center mb-6 text-blue-600">MHT CET 2025 College Predictor</h1>
+        <p class="text-center text-sm text-gray-600 mb-4">Enter your details to find engineering colleges in Maharashtra you can get into!</p>
+        <form id="predictorForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">MHT CET Percentile (0–100)</label>
+                <input type="number" id="percentile" min="0" max="100" step="0.01" required
+                       class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Category</label>
+                <select id="category" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="OBC">OBC</option>
+                    <option value="General">General</option>
+                    <option value="SC">SC</option>
+                    <option value="ST">ST</option>
+                    <option value="EWS">EWS</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Gender</label>
+                <select id="gender" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Preferred Branch</label>
+                <select id="branch" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="All">All Branches</option>
+                    <option value="Mechanical">Mechanical</option>
+                    <option value="Civil">Civil</option>
+                    <option value="Electrical">Electrical</option>
+                    <option value="ENTC">Electronics & Telecommunication</option>
+                    <option value="CS">Computer Science</option>
+                    <option value="IT">Information Technology</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Preferred District</label>
+                <select id="district" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="All">All Districts</option>
+                    <option value="Pune">Pune</option>
+                    <option value="Mumbai">Mumbai</option>
+                    <option value="Nagpur">Nagpur</option>
+                    <option value="Aurangabad">Aurangabad</option>
+                    <option value="Nashik">Nashik</option>
+                    <option value="Kolhapur">Kolhapur</option>
+                    <option value="Solapur">Solapur</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Admission Type</label>
+                <select id="admissionType" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="State-level">State-level</option>
+                    <option value="Home University">Home University</option>
+                    <option value="Other than Home University">Other than Home University</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Home University</label>
+                <select id="homeUniversity" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="All">All Universities</option>
+                    <option value="SPPU">Savitribai Phule Pune University</option>
+                    <option value="Mumbai University">Mumbai University</option>
+                    <option value="RTMNU">RTM Nagpur University</option>
+                    <option value="BAMU">Dr. Babasaheb Ambedkar Marathwada University</option>
+                    <option value="SGBAU">Sant Gadge Baba Amravati University</option>
+                    <option value="Shivaji University">Shivaji University</option>
+                    <option value="Solapur University">Solapur University</option>
+                </select>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition">Predict Colleges</button>
+        </form>
+        <div id="results" class="mt-6">
+            <h2 class="text-xl font-semibold mb-4 text-blue-600">Predicted Colleges</h2>
+            <div class="overflow-x-auto">
+                <table id="resultsTable" class="w-full border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-blue-100">
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">College Name</th>
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">Location</th>
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">Sample Branches</th>
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">Est. OBC Cutoff</th>
+                            <th class="border border-gray-300 p-2 text-left text-sm font-medium">Home University</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <button id="downloadPdf" class="mt-4 bg-green-600 text-white p-2 rounded-md hover:bg-green-700 transition hidden">Download as PDF</button>
+            <p class="mt-4 text-sm text-gray-600">Note: Cutoffs are estimates based on 2023–2024 data. Verify with official CAP results at cetcell.mahacet.org.</p>
+        </div>
+    </div>
+
+    <script>
+        const colleges = [
+            { name: "JSPM’s Rajarshi Shahu College of Engineering", location: "Pune", branches: "Mechanical, Civil, ENTC, IT", cutoff: "50-55", university: "SPPU" },
+            { name: "Zeal College of Engineering and Research", location: "Pune", branches: "Mechanical, Civil, Electrical, IT", cutoff: "48-55", university: "SPPU" },
+            { name: "D. Y. Patil College of Engineering, Akurdi", location: "Pune", branches: "Mechanical, Civil, ENTC, IT", cutoff: "52-60", university: "SPPU" },
+            { name: "Sinhgad College of Engineering", location: "Pune", branches: "Mechanical, Civil, Chemical, ENTC", cutoff: "45-50", university: "SPPU" },
+            { name: "JSPM Narhe Technical Campus", location: "Pune", branches: "Mechanical, Civil, Electrical", cutoff: "45-50", university: "SPPU" },
+            { name: "AISSMS College of Engineering", location: "Pune", branches: "Mechanical, Civil, Electrical", cutoff: "50-55", university: "SPPU" },
+            { name: "Pimpri Chinchwad College of Engineering", location: "Pune", branches: "Mechanical, Civil, ENTC", cutoff: "50-55", university: "SPPU" },
+            { name: "MIT Academy of Engineering, Alandi", location: "Pune", branches: "Mechanical, Civil, ENTC", cutoff: "48-53", university: "SPPU" },
+            { name: "Dhole Patil College of Engineering", location: "Pune", branches: "Mechanical, Civil, IT", cutoff: "45-50", university: "SPPU" },
+            { name: "SKN Sinhgad Institute of Technology", location: "Lonavala", branches: "Mechanical, Civil, Electrical", cutoff: "45-50", university: "SPPU" },
+            { name: "Government College of Engineering, Jalgaon", location: "Jalgaon", branches: "Mechanical, Civil, Electrical", cutoff: "50-58", university: "North Maharashtra" },
+            { name: "Shri Sant Gajanan Maharaj College of Engineering", location: "Shegaon", branches: "Mechanical, Electrical, CS", cutoff: "48-55", university: "SGBAU" },
+            { name: "Prof. Ram Meghe Institute of Technology", location: "Badnera", branches: "Mechanical, Civil, ENTC", cutoff: "47-53", university: "SGBAU" },
+            { name: "P. R. Pote College of Engineering", location: "Amravati", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "SGBAU" },
+            { name: "Sipna College of Engineering and Technology", location: "Amravati", branches: "Mechanical, Civil, ENTC", cutoff: "45-50", university: "SGBAU" },
+            { name: "Deogiri Institute of Engineering", location: "Aurangabad", branches: "Mechanical, Civil, CS", cutoff: "45-55", university: "BAMU" },
+            { name: "Aurangabad College of Engineering", location: "Aurangabad", branches: "Mechanical, Civil, Electrical", cutoff: "45-50", university: "BAMU" },
+            { name: "Shreeyash College of Engineering", location: "Aurangabad", branches: "Mechanical, Civil, ENTC", cutoff: "45-50", university: "BAMU" },
+            { name: "Everest College of Engineering", location: "Aurangabad", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "BAMU" },
+            { name: "CSMSS Chh. Shahu College of Engineering", location: "Aurangabad", branches: "Mechanical, Civil, Electrical", cutoff: "45-50", university: "BAMU" },
+            { name: "K. K. Wagh Institute of Engineering", location: "Nashik", branches: "Mechanical, Civil, CS", cutoff: "50-55", university: "SPPU" },
+            { name: "MVP’s Karmaveer Adv. Baburao Thakare COE", location: "Nashik", branches: "Mechanical, Civil, ENTC", cutoff: "45-50", university: "SPPU" },
+            { name: "Sandip Institute of Technology", location: "Nashik", branches: "Mechanical, Civil, Electrical", cutoff: "45-50", university: "SPPU" },
+            { name: "Sanjivani College of Engineering", location: "Kopargaon", branches: "Mechanical, Civil, CS, ENTC", cutoff: "48-54", university: "SPPU" },
+            { name: "Amrutvahini College of Engineering", location: "Sangamner", branches: "Mechanical, Civil, ENTC", cutoff: "47-53", university: "SPPU" },
+            { name: "GH Raisoni Institute of Engineering", location: "Nagpur", branches: "Mechanical, Civil, CS, AI", cutoff: "47-53", university: "RTMNU" },
+            { name: "SB Jain Institute of Technology", location: "Nagpur", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "RTMNU" },
+            { name: "Priyadarshini College of Engineering", location: "Nagpur", branches: "Mechanical, Civil, ENTC", cutoff: "45-50", university: "RTMNU" },
+            { name: "Yeshwantrao Chavan College of Engineering", location: "Nagpur", branches: "Mechanical, Civil, Electrical", cutoff: "48-53", university: "RTMNU" },
+            { name: "KDK College of Engineering", location: "Nagpur", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "RTMNU" },
+            { name: "Rajarambapu Institute of Technology", location: "Sangli", branches: "Mechanical, Civil, CS", cutoff: "50-57", university: "Shivaji University" },
+            { name: "Walchand Institute of Technology", location: "Solapur", branches: "Mechanical, Civil, ENTC", cutoff: "48-53", university: "Solapur University" },
+            { name: "Brahmdevdada Mane Institute of Technology", location: "Solapur", branches: "Mechanical, Civil, Electrical", cutoff: "45-50", university: "Solapur University" },
+            { name: "A. G. Patil Institute of Technology", location: "Solapur", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "Solapur University" },
+            { name: "Tatyasaheb Kore Institute of Engineering", location: "Kolhapur", branches: "Mechanical, Civil, Chemical", cutoff: "45-50", university: "Shivaji University" },
+            { name: "DKTE Society’s Textile and Engineering Institute", location: "Ichalkaranji", branches: "Mechanical, Civil, Textile", cutoff: "45-50", university: "Shivaji University" },
+            { name: "Shivajirao S. Jondhale College of Engineering", location: "Thane", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Vidyavardhini’s College of Engineering", location: "Vasai", branches: "Mechanical, Civil, ENTC", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Lokmanya Tilak College of Engineering", location: "Navi Mumbai", branches: "Mechanical, Civil, Electrical", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Atharva College of Engineering", location: "Malad", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Bharati Vidyapeeth College of Engineering", location: "Navi Mumbai", branches: "Mechanical, Civil, Chemical", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Fr. C. Rodrigues Institute of Technology", location: "Vashi", branches: "Mechanical, Civil, ENTC", cutoff: "50-55", university: "Mumbai University" },
+            { name: "SIES Graduate School of Technology", location: "Nerul", branches: "Mechanical, Civil, CS", cutoff: "48-53", university: "Mumbai University" },
+            { name: "Pillai College of Engineering", location: "Panvel", branches: "Mechanical, Civil, CS", cutoff: "47-53", university: "Mumbai University" },
+            { name: "Anjuman-I-Islam’s Kalsekar Technical Campus", location: "Panvel", branches: "Mechanical, Civil, Electrical", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Terna Engineering College", location: "Nerul", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Vivekanand Education Society’s Institute of Technology", location: "Chembur", branches: "Mechanical, Civil, ENTC", cutoff: "48-53", university: "Mumbai University" },
+            { name: "Rizvi College of Engineering", location: "Bandra", branches: "Mechanical, Civil, CS", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Datta Meghe College of Engineering", location: "Airoli", branches: "Mechanical, Civil, Chemical", cutoff: "45-50", university: "Mumbai University" },
+            { name: "Government College of Engineering, Karad", location: "Karad", branches: "Mechanical, Civil, Electrical", cutoff: "50-58", university: "Shivaji University" }
+        ];
+
+        document.getElementById('predictorForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const percentile = parseFloat(document.getElementById('percentile').value);
+            const category = document.getElementById('category').value;
+            const branch = document.getElementById('branch').value;
+            const district = document.getElementById('district').value;
+            const admissionType = document.getElementById('admissionType').value;
+            const homeUniversity = document.getElementById('homeUniversity').value;
+
+            // Validate percentile
+            if (percentile < 0 || percentile > 100) {
+                alert('Please enter a valid percentile between 0 and 100.');
+                return;
+            }
+
+            // Filter colleges
+            let filteredColleges = colleges.filter(college => {
+                const [minCutoff, maxCutoff] = college.cutoff.split('-').map(Number);
+                let adjustedMinCutoff = minCutoff;
+                let adjustedMaxCutoff = maxCutoff;
+
+                // Adjust cutoffs for category
+                if (category === 'OBC') {
+                    adjustedMinCutoff -= 0.15;
+                    adjustedMaxCutoff -= 0.10;
+                } else if (category === 'SC' || category === 'ST') {
+                    adjustedMinCutoff -= 0.20;
+                    adjustedMaxCutoff -= 0.15;
+                } else if (category === 'EWS') {
+                    adjustedMinCutoff -= 0.10;
+                    adjustedMaxCutoff -= 0.05;
+                }
+
+                // Check percentile range (±5)
+                const isPercentileMatch = percentile >= adjustedMinCutoff - 5 && percentile <= adjustedMaxCutoff + 5;
+
+                // Check branch preference
+                const isBranchMatch = branch === 'All' || college.branches.includes(branch);
+
+                // Check district preference
+                const isDistrictMatch = district === 'All' || college.location === district;
+
+                // Check Home University preference
+                const isUniversityMatch = homeUniversity === 'All' || college.university === homeUniversity;
+
+                // Admission type (simplified, all colleges support all types)
+                const isAdmissionMatch = true;
+
+                return isPercentileMatch && isBranchMatch && isDistrictMatch && isUniversityMatch && isAdmissionMatch;
+            });
+
+            // Sort by cutoff descending
+            filteredColleges.sort((a, b) => {
+                const [minA] = a.cutoff.split('-').map(Number);
+                const [minB] = b.cutoff.split('-').map(Number);
+                return minB - minA;
+            });
+
+            // Display results
+            const resultsBody = document.getElementById('resultsBody');
+            resultsBody.innerHTML = '';
+            filteredColleges.forEach(college => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="border border-gray-300 p-2">${college.name}</td>
+                    <td class="border border-gray-300 p-2">${college.location}</td>
+                    <td class="border border-gray-300 p-2">${college.branches}</td>
+                    <td class="border border-gray-300 p-2">${college.cutoff}</td>
+                    <td class="border border-gray-300 p-2">${college.university}</td>
+                `;
+                resultsBody.appendChild(row);
+            });
+
+            // Show table and download button
+            document.getElementById('resultsTable').classList.add('show');
+            document.getElementById('downloadPdf').classList.remove('hidden');
+
+            // Handle no results
+            if (filteredColleges.length === 0) {
+                resultsBody.innerHTML = '<tr><td colspan="5" class="text-center p-2 text-red-600">No colleges match your criteria. Try adjusting your inputs (e.g., broader percentile range or "All" for branch/district).</td></tr>';
+                document.getElementById('downloadPdf').classList.add('hidden');
+            }
+        });
+
+        // PDF Download
+        document.getElementById('downloadPdf').addEventListener('click', function() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFontSize(16);
+            doc.text('MHT CET 2025 College Predictor Results', 10, 10);
+            doc.setFontSize(12);
+            doc.text(`Date: June 29, 2025`, 10, 20);
+            doc.text(`Percentile: ${document.getElementById('percentile').value}`, 10, 30);
+            doc.text(`Category: ${document.getElementById('category').value}`, 10, 40);
+            doc.text(`Gender: ${document.getElementById('gender').value}`, 10, 50);
+            doc.text(`Branch: ${document.getElementById('branch').value}`, 10, 60);
+            doc.text(`District: ${document.getElementById('district').value}`, 10, 70);
+            doc.text(`Admission Type: ${document.getElementById('admissionType').value}`, 10, 80);
+            doc.text(`Home University: ${document.getElementById('homeUniversity').value}`, 10, 90);
+
+            let y = 100;
+            doc.text('Predicted Colleges:', 10, y);
+            y += 10;
+            const table = document.getElementById('resultsTable');
+            const rows = table.querySelectorAll('tbody tr');
+            doc.setFontSize(10);
+            doc.text('College Name | Location | Branches | Est. OBC Cutoff | Home University', 10, y);
+            y += 5;
+            doc.line(10, y, 200, y);
+            y += 5;
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                const rowText = `${cells[0].textContent} | ${cells[1].textContent} | ${cells[2].textContent} | ${cells[3].textContent} | ${cells[4].textContent}`;
+                const lines = doc.splitTextToSize(rowText, 180);
+                doc.text(lines, 10, y);
+                y += lines.length * 5;
+                if (y > 270) {
+                    doc.addPage();
+                    y = 10;
+                }
+            });
+            doc.text('Note: Cutoffs are estimates based on 2023–2024 data. Verify with official CAP results at cetcell.mahacet.org.', 10, y + 10);
+            doc.save('MHT_CET_College_Predictor_Results.pdf');
+        });
+    </script>
+</body>
+</html>
